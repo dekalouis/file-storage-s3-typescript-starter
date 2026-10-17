@@ -4,38 +4,8 @@ import { getVideo, updateVideo } from "../db/videos";
 import type { ApiConfig } from "../config";
 import type { BunRequest } from "bun";
 import { BadRequestError, NotFoundError, UserForbiddenError } from "./errors";
-// import { getInMemoryURL } from "./assets";
-
-// type Thumbnail = {
-//   data: ArrayBuffer;
-//   mediaType: string;
-// };
-
-// const videoThumbnails: Map<string, Thumbnail> = new Map();
-
-// export async function handlerGetThumbnail(cfg: ApiConfig, req: BunRequest) {
-//   const { videoId } = req.params as { videoId?: string };
-//   if (!videoId) {
-//     throw new BadRequestError("Invalid video ID");
-//   }
-//
-//   const video = getVideo(cfg.db, videoId);
-//   if (!video) {
-//     throw new NotFoundError("Couldn't find video");
-//   }
-//
-//   const thumbnail = videoThumbnails.get(videoId);
-//   if (!thumbnail) {
-//     throw new NotFoundError("Thumbnail not found");
-//   }
-//
-//   return new Response(thumbnail.data, {
-//     headers: {
-//       "Content-Type": thumbnail.mediaType,
-//       "Cache-Control": "no-store",
-//     },
-//   });
-// }
+import { getAssetDiskPath, getAssetPath, getAssetURL, mediaTypeExt } from "./assets";
+import { randomBytes } from "node:crypto";
 
 export async function handlerUploadThumbnail(cfg: ApiConfig, req: BunRequest) {
   const { videoId } = req.params as { videoId?: string };
@@ -74,22 +44,19 @@ export async function handlerUploadThumbnail(cfg: ApiConfig, req: BunRequest) {
     throw new BadRequestError("Missing content type for thumbnail");
   }
 
-  const fileData = await file.arrayBuffer();
-  if (!fileData) {
-    throw new Error("Error reading file data");
+  const ext = mediaTypeExt(mediaType);
+  if (ext !== ".jpeg" && ext !== ".png") {
+    throw new BadRequestError("Wrong file extension!");
   }
 
-  const buffer = Buffer.from(fileData);
-  const base64 = buffer.toString("base64");
-  const dataURL = `data:${mediaType};base64,${base64}`;
+  const assetPath = getAssetPath(mediaType);
 
-  // videoThumbnails.set(videoId, {
-  //   data: fileData,
-  //   mediaType,
-  // });
+  const assetDiskPath = getAssetDiskPath(cfg, assetPath);
+  await Bun.write(assetDiskPath, file);
 
-  // const urlPath = getInMemoryURL(cfg, videoId);
-  video.thumbnailURL = dataURL;
+  const urlPath = getAssetURL(cfg, assetPath);
+  video.thumbnailURL = urlPath;
+
   updateVideo(cfg.db, video);
 
   return respondWithJSON(200, null);
